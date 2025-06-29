@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TODO with LLM - MCPテスト</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .chat-container {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            height: 400px;
+            overflow-y: auto;
+            padding: 15px;
+            margin-bottom: 20px;
+            background-color: #fafafa;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+        
+        .user-message {
+            background-color: #007bff;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .assistant-message {
+            background-color: #e9ecef;
+            color: #333;
+        }
+        
+        .tool-call {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+        
+        .input-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        
+        button {
+            padding: 12px 24px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .saved-todos {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .todo-item {
+            padding: 8px;
+            margin: 5px 0;
+            background-color: white;
+            border-left: 4px solid #007bff;
+            border-radius: 4px;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .example-prompts {
+            margin-bottom: 20px;
+        }
+        
+        .example-button {
+            background-color: #6c757d;
+            margin: 5px;
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+        
+        .example-button:hover {
+            background-color: #545b62;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📝 TODO管理 with LLM & MCP</h1>
+        
+        <div class="example-prompts">
+            <h3>💡 試してみる例文：</h3>
+            <button class="example-button" onclick="setExampleText('今度の週末、友達と映画を見る予定があるんだけど、他にもやりたいことがあって整理したい')">
+                週末の予定整理
+            </button>
+            <button class="example-button" onclick="setExampleText('洗濯、買い物、読書もしたい')">
+                追加タスク
+            </button>
+            <button class="example-button" onclick="loadSavedTodos()">
+                保存済みTODO表示
+            </button>
+        </div>
+        
+        <div id="chat" class="chat-container">
+            <div class="message assistant-message">
+                <strong>アシスタント:</strong> こんにちは！TODOの整理をお手伝いします。やりたいことや予定を教えてください 😊
+            </div>
+        </div>
+        
+        <div class="input-container">
+            <input type="text" id="messageInput" placeholder="相談内容を入力してください..." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()" id="sendButton">送信</button>
+        </div>
+        
+        <div id="status"></div>
+        
+        <div id="savedTodos" class="saved-todos" style="display: none;">
+            <h3>💾 保存されたTODO:</h3>
+            <div id="todoList"></div>
+        </div>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chat');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const statusDiv = document.getElementById('status');
+        const savedTodosDiv = document.getElementById('savedTodos');
+        const todoListDiv = document.getElementById('todoList');
+
+        let conversation = [];
+
+        function setExampleText(text) {
+            messageInput.value = text;
+            messageInput.focus();
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function showStatus(message, type = 'success') {
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+            setTimeout(() => {
+                statusDiv.innerHTML = '';
+            }, 3000);
+        }
+
+        function addMessageToChat(role, content, isToolCall = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role === 'user' ? 'user-message' : 'assistant-message'}`;
+            
+            if (isToolCall) {
+                messageDiv.innerHTML = `<div class="tool-call"><strong>🔧 ツール実行:</strong> ${content}</div>`;
+            } else {
+                messageDiv.innerHTML = `<strong>${role === 'user' ? 'あなた' : 'アシスタント'}:</strong> ${content}`;
+            }
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            sendButton.disabled = true;
+            sendButton.textContent = '送信中...';
+
+            try {
+                // ユーザーメッセージを表示
+                addMessageToChat('user', message);
+                conversation.push({ role: 'user', content: message });
+
+                // LLMに送信
+                const response = await fetch('http://localhost:3000/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages: conversation })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // アシスタントの応答を表示
+                if (data.content && data.content[0] && data.content[0].text) {
+                    addMessageToChat('assistant', data.content[0].text);
+                    conversation.push({ role: 'assistant', content: data.content[0].text });
+                }
+
+                // ツール呼び出しがある場合
+                if (data.tool_calls && data.tool_calls.length > 0) {
+                    for (const toolCall of data.tool_calls) {
+                        const toolName = toolCall.function.name;
+                        const toolArgs = JSON.parse(toolCall.function.arguments);
+                        
+                        addMessageToChat('assistant', `${toolName}を実行しています...`, true);
+                        
+                        // ツールを実行
+                        const toolResponse = await callTool(toolName, toolArgs);
+                        
+                        if (toolResponse.success) {
+                            addMessageToChat('assistant', `✅ ${toolResponse.message}`, true);
+                            showStatus(toolResponse.message, 'success');
+                            
+                            // 保存されたTODOを表示
+                            if (toolName === 'todo_save') {
+                                setTimeout(loadSavedTodos, 1000);
+                            }
+                        } else {
+                            addMessageToChat('assistant', `❌ エラー: ${toolResponse.error}`, true);
+                            showStatus(`エラー: ${toolResponse.error}`, 'error');
+                        }
+                    }
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                addMessageToChat('assistant', `エラーが発生しました: ${error.message}`);
+                showStatus(`通信エラー: ${error.message}`, 'error');
+            } finally {
+                sendButton.disabled = false;
+                sendButton.textContent = '送信';
+                messageInput.value = '';
+                messageInput.focus();
+            }
+        }
+
+        async function callTool(toolName, params) {
+            try {
+                const response = await fetch(`http://localhost:3000/api/tool/${toolName}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ params })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+
+        async function loadSavedTodos() {
+            try {
+                const response = await callTool('todo_get', {});
+                
+                if (response.success && response.data.length > 0) {
+                    todoListDiv.innerHTML = '';
+                    
+                    response.data.forEach(todo => {
+                        const todoDiv = document.createElement('div');
+                        todoDiv.innerHTML = `
+                            <div style="margin-bottom: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background-color: white;">
+                                <div style="font-weight: bold; margin-bottom: 8px;">📅 ${new Date(todo.timestamp).toLocaleString('ja-JP')}</div>
+                                <div style="margin-bottom: 8px;"><strong>カテゴリ:</strong> ${todo.category} | <strong>優先度:</strong> ${todo.priority}</div>
+                                <div style="margin-bottom: 8px;"><strong>タスク:</strong></div>
+                                ${todo.items.map(item => `<div class="todo-item">• ${item}</div>`).join('')}
+                            </div>
+                        `;
+                        todoListDiv.appendChild(todoDiv);
+                    });
+                    
+                    savedTodosDiv.style.display = 'block';
+                    showStatus(`${response.data.length}件のTODOを読み込みました`, 'success');
+                } else {
+                    savedTodosDiv.style.display = 'none';
+                    showStatus('保存されたTODOはありません', 'error');
+                }
+            } catch (error) {
+                console.error('Error loading todos:', error);
+                showStatus(`TODOの読み込みエラー: ${error.message}`, 'error');
+            }
+        }
+
+        // 初期化時にフォーカス
+        messageInput.focus();
+    </script>
+</body>
+</html>
