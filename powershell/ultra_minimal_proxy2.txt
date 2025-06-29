@@ -1,0 +1,131 @@
+# 超最小限 TODO アプリ - PowerShell+JavaScript プラットフォーム
+# 設計原則: 最小限スタート → 成長しながら学習
+
+# C#は最小限：LLM処理のみ
+Add-Type @"
+using System.Collections.Generic;
+public class LLM {
+    public static (string content, bool needsTool, List<string> items) Parse(string msg) {
+        var items = new List<string>();
+        var needsTool = false;
+        var content = "";
+        
+        if (msg.Contains("週末") || msg.Contains("予定")) {
+            content = "週末の予定を整理しましょう！やりたいことを教えてください。";
+        }
+        else if (msg.Contains("洗濯") || msg.Contains("買い物") || msg.Contains("映画") || msg.Contains("読書")) {
+            if (msg.Contains("映画")) items.Add("友達と映画を見る");
+            if (msg.Contains("洗濯")) items.Add("洗濯をする");
+            if (msg.Contains("買い物")) items.Add("買い物に行く");
+            if (msg.Contains("読書")) items.Add("読書をする");
+            
+            content = "以下のタスクを整理しました：\n";
+            foreach (var item in items) content += "• " + item + "\n";
+            content += "\n優先順位を付けて保存しますね。";
+            needsTool = true;
+        }
+        else {
+            content = "どのようなことを整理したいですか？";
+        }
+        
+        return (content, needsTool, items);
+    }
+}
+"@
+
+# HTTPサーバー開始
+$ls = [System.Net.HttpListener]::new()
+$ls.Prefixes.Add("http://*:3000/")
+$ls.Start()
+
+Write-Host "⚡ TODO サーバー起動 http://localhost:3000/" -ForegroundColor Green
+Write-Host "📝 PowerShellがLLM処理、JavaScriptがGUI担当" -ForegroundColor Cyan
+Write-Host "🎯 最小限スタート → 成長型プラットフォーム" -ForegroundColor Yellow
+
+while ($ls.IsListening) {
+    $ctx = $ls.GetContext()
+    $req = $ctx.Request
+    $res = $ctx.Response
+    
+    # CORS設定
+    $res.AddHeader("Access-Control-Allow-Origin", "*")
+    $res.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    $res.AddHeader("Access-Control-Allow-Headers", "Content-Type")
+    
+    if ($req.HttpMethod -eq "OPTIONS") {
+        $res.StatusCode = 200
+        $res.Close()
+        continue
+    }
+    
+    $path = $req.Url.LocalPath
+    Write-Host "📝 $($req.HttpMethod) $path" -ForegroundColor Gray
+    
+    try {
+        if ($path -eq "/todo-app.html") {
+            # HTMLファイル配信
+            if (Test-Path "todo-app.html") {
+                $html = Get-Content "todo-app.html" -Raw -Encoding UTF8
+                $buf = [System.Text.Encoding]::UTF8.GetBytes($html)
+                $res.ContentType = "text/html; charset=utf-8"
+                $res.ContentLength64 = $buf.Length
+                $res.OutputStream.Write($buf, 0, $buf.Length)
+            } else {
+                $res.StatusCode = 404
+            }
+        }
+        elseif ($path -eq "/api/chat" -and $req.HttpMethod -eq "POST") {
+            # LLM処理 (PowerShell責任範囲)
+            $reader = [System.IO.StreamReader]::new($req.InputStream, $req.ContentEncoding)
+            $body = $reader.ReadToEnd() | ConvertFrom-Json
+            $reader.Close()
+            
+            $msg = $body.messages[-1].content
+            $result = [LLM]::Parse($msg)
+            
+            $response = @{
+                type = "message"
+                role = "assistant"
+                content = @(@{ type = "text"; text = $result.content })
+            }
+            
+            if ($result.needsTool) {
+                $toolArgs = @{ 
+                    items = @($result.items)
+                    category = "weekend"
+                    priority = "medium"
+                    timestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss")
+                    id = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+                }
+                $response.tool_calls = @(@{
+                    type = "function"
+                    function = @{
+                        name = "todo_save"
+                        arguments = ($toolArgs | ConvertTo-Json -Compress)
+                    }
+                })
+            }
+            
+            $json = ConvertTo-Json $response -Depth 10
+            $buf = [System.Text.Encoding]::UTF8.GetBytes($json)
+            $res.ContentType = "application/json; charset=utf-8"
+            $res.ContentLength64 = $buf.Length
+            $res.OutputStream.Write($buf, 0, $buf.Length)
+            
+            Write-Host "💬 LLM処理完了: $($msg.Substring(0, [Math]::Min(30, $msg.Length)))..." -ForegroundColor Yellow
+        }
+        else {
+            $res.StatusCode = 404
+            $error = @{ error = "Not found: $path" } | ConvertTo-Json
+            $buf = [System.Text.Encoding]::UTF8.GetBytes($error)
+            $res.ContentType = "application/json; charset=utf-8"
+            $res.ContentLength64 = $buf.Length
+            $res.OutputStream.Write($buf, 0, $buf.Length)
+        }
+    } catch {
+        Write-Host "⚠️ Error: $($_.Exception.Message)" -ForegroundColor Red
+        $res.StatusCode = 500
+    } finally {
+        $res.Close()
+    }
+}
