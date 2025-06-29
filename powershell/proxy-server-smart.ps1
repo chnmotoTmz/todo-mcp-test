@@ -1,10 +1,9 @@
-# スマートTODO MCP サーバー - 最適化版
+# スマートTODO MCP サーバー - 修正版
 
 function INIT-TODO {
     Add-Type -AssemblyName System.Net
     Add-Type -AssemblyName System.Web
     
-    # C#クラス定義 (コンパクト版)
     Add-Type @"
 using System; using System.Collections.Generic; using System.IO; using System.Text.Json; using System.Text.Json.Serialization;
 public class Todo { 
@@ -38,11 +37,11 @@ public class LLM {
     
     $global:tm = [TodoMgr]::new()
     $global:ls = [System.Net.HttpListener]::new()
-    $ls.Prefixes.Add("http://*:3000/")
+    $ls.Prefixes.Add("http://*:8080/")
     $ls.Start()
     
-    Write-Host "⚡ TODO MCP サーバー起動完了 http://*:3000/" -ForegroundColor Green
-    Write-Host "📝 http://localhost:3000/todo-app.html でアクセス" -ForegroundColor Cyan
+    Write-Host "⚡ TODO MCP サーバー起動完了 http://*:8080/" -ForegroundColor Green
+    Write-Host "📝 http://localhost:8080/todo-app.html でアクセス" -ForegroundColor Cyan
     Write-Host "🛑 Ctrl+C で終了" -ForegroundColor Red
 }
 
@@ -72,7 +71,8 @@ function SEND-HTML($rs, $file) {
         $rs.StatusCode = 200
     } else {
         $rs.StatusCode = 404
-        SEND-JSON $rs @{ error = "File not found: $file" }
+        $errorObj = @{ error = "File not found: $file" }
+        SEND-JSON $rs $errorObj
     }
 }
 
@@ -91,11 +91,12 @@ function HANDLE-CHAT($rq, $rs) {
     }
     
     if ($result.Item2) {
+        $toolArgs = @{ items = $result.Item3; category = "weekend"; priority = "medium" }
         $response.tool_calls = @(@{
             type = "function"
             function = @{
                 name = "todo_save"
-                arguments = (@{ items = $result.Item3; category = "weekend"; priority = "medium" } | ConvertTo-Json -Compress)
+                arguments = ($toolArgs | ConvertTo-Json -Compress)
             }
         })
     }
@@ -115,7 +116,7 @@ function HANDLE-SAVE($rq, $rs) {
     $todos.Add($todo)
     $global:tm.Save($todos)
     
-    SEND-JSON $rs @{
+    $responseObj = @{
         success = $true
         message = "$($params.items.Count)個のタスクを保存しました！"
         data = @{
@@ -126,14 +127,16 @@ function HANDLE-SAVE($rq, $rs) {
             priority = $todo.Priority
         }
     }
+    
+    SEND-JSON $rs $responseObj
     Write-Host "💾 保存: $($params.items.Count)件" -ForegroundColor Green
 }
 
 function HANDLE-GET($rs) {
     $todos = $global:tm.Load()
-    $data = @()
+    $todoArray = @()
     foreach ($todo in $todos) {
-        $data += @{
+        $todoArray += @{
             id = $todo.Id
             timestamp = $todo.Timestamp.ToString("yyyy-MM-ddTHH:mm:ss")
             items = $todo.Items
@@ -142,11 +145,13 @@ function HANDLE-GET($rs) {
         }
     }
     
-    SEND-JSON $rs @{
+    $responseObj = @{
         success = $true
-        data = $data
+        data = $todoArray
         count = $todos.Count
     }
+    
+    SEND-JSON $rs $responseObj
     Write-Host "📖 取得: $($todos.Count)件" -ForegroundColor Cyan
 }
 
@@ -174,13 +179,15 @@ function HANDLE-REQUEST($ct) {
             "/api/tool/todo_get" { if ($rq.HttpMethod -eq "POST") { HANDLE-GET $rs } }
             default { 
                 $rs.StatusCode = 404
-                SEND-JSON $rs @{ error = "Endpoint not found: $path" }
+                $errorObj = @{ error = "Endpoint not found: $path" }
+                SEND-JSON $rs $errorObj
                 Write-Host "❌ 404: $path" -ForegroundColor Red
             }
         }
     } catch {
         $rs.StatusCode = 500
-        SEND-JSON $rs @{ error = "Server error: $($_.Exception.Message)" }
+        $errorObj = @{ error = "Server error: $($_.Exception.Message)" }
+        SEND-JSON $rs $errorObj
         Write-Host "⚠️ Error: $($_.Exception.Message)" -ForegroundColor Red
     } finally {
         $rs.Close()
@@ -198,7 +205,6 @@ function RUN-SERVER {
     }
 }
 
-# サーバー起動
 try {
     INIT-TODO
     RUN-SERVER
