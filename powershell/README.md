@@ -2,13 +2,30 @@
 
 最速起動を実現するPowerShell + C# 統合版のTODO管理システム
 
-## 🚀 特徴
+## 🚀 3つのバージョン
 
-- **⚡ 超高速起動**: 約0.5秒でサーバー起動
-- **🔧 C#統合**: PowerShell内でC#クラスをフル活用
-- **📦 単体実行**: PowerShellのみで完結（Node.js不要）
-- **🌐 Web GUI**: ブラウザで快適なインターフェース
-- **💾 永続化**: JSONファイルでデータ保存
+### 1. **標準版** - `proxy-server.ps1`
+- 詳細なコメント付き
+- 初心者向け
+- 約200行
+
+### 2. **修正版** - `proxy-server-fixed.ps1` 
+- Content-Lengthエラー修正済み
+- 安定動作保証
+- 約180行
+
+### 3. **🎯 スマート版** - `proxy-server-smart.ps1` ⭐**推奨**
+- 極限まで最適化
+- JIRA CORSプロキシスタイル
+- **わずか120行**
+
+## ⚡ 特徴
+
+- **超高速起動**: 約0.5秒でサーバー起動
+- **C#統合**: PowerShell内でC#クラスをフル活用
+- **単体実行**: PowerShellのみで完結（Node.js不要）
+- **Web GUI**: ブラウザで快適なインターフェース
+- **永続化**: JSONファイルでデータ保存
 
 ## 📋 動作要件
 
@@ -20,32 +37,19 @@
 
 ## 🎯 クイックスタート
 
-### 1. ファイルダウンロード
-
-```powershell
-# GitHubからクローン
-git clone https://github.com/chnmotoTmz/todo-mcp-test.git
-cd todo-mcp-test/powershell
-```
-
-### 2. 実行
-
-```powershell
-# 方法1: バッチファイル（推奨）
+### 方法1: バッチファイル（推奨）
+```batch
 start.bat
+```
 
-# 方法2: PowerShell起動スクリプト
+### 方法2: PowerShell起動スクリプト
+```powershell
 .\start.ps1
-
-# 方法3: 直接実行
-.\proxy-server.ps1
 ```
 
-### 3. ブラウザアクセス
-
-自動でブラウザが開きます。手動の場合：
-```
-http://localhost:3000/todo-app.html
+### 方法3: 直接実行（スマート版）
+```powershell
+.\proxy-server-smart.ps1
 ```
 
 ## 🔧 実行ポリシーエラーの対処
@@ -110,20 +114,22 @@ HTMLアプリ → PowerShell HTTPサーバー → C#クラス → JSON保存
 
 ```
 powershell/
-├── proxy-server.ps1      # メインサーバー（C#統合）
-├── start.ps1             # 起動スクリプト  
-├── start.bat             # Windows簡単起動用
-├── todo-app.html         # PowerShell版対応GUI
-└── README.md             # このファイル
+├── proxy-server.ps1         # 標準版（詳細コメント）
+├── proxy-server-fixed.ps1   # 修正版（安定動作）
+├── proxy-server-smart.ps1   # ⭐スマート版（最適化）
+├── start.ps1                # 起動スクリプト  
+├── start.bat                # Windows簡単起動用
+├── todo-app.html            # PowerShell版対応GUI
+└── README.md                # このファイル
 ```
 
 ## 📊 性能比較
 
-| 方式 | 起動時間 | メモリ使用量 | 必要ランタイム |
-|------|----------|-------------|---------------|
-| **PowerShell版** | **0.5秒** | **20MB** | **なし** |
-| Node.js版 | 3-5秒 | 40MB | Node.js |
-| .NET版 | 1-2秒 | 15MB | .NET Runtime |
+| 版 | 起動時間 | メモリ使用量 | 行数 | 推奨用途 |
+|---|----------|-------------|------|----------|
+| 標準版 | 0.5秒 | 20MB | 200行 | 学習・理解 |
+| 修正版 | 0.5秒 | 20MB | 180行 | 安定運用 |
+| **スマート版** | **0.5秒** | **20MB** | **120行** | **本番運用** |
 
 ## 🔧 カスタマイズ
 
@@ -133,23 +139,30 @@ powershell/
 # start.ps1で指定
 .\start.ps1 -Port 8080
 
-# 直接編集
-# proxy-server.ps1の該当行を変更
-$listener.Prefixes.Add("http://localhost:8080/")
+# 直接編集（スマート版）
+$ls.Prefixes.Add("http://*:8080/")
 ```
 
 ### C#クラス拡張
 
 ```powershell
-# proxy-server.ps1内のAdd-Type部分に追加
-Add-Type @"
-public class CustomTodoProcessor {
-    public static void ProcessAdvancedTodo(TodoItem todo) {
+# スマート版のAdd-Type部分に追加
+public class CustomProcessor {
+    public static void ProcessAdvanced(Todo todo) {
         // カスタムロジックを追加
     }
 }
-"@
 ```
+
+## 🏆 スマート版の優位性
+
+JIRAプロキシコードの美しいスタイルを採用：
+
+- **関数分割**: `INIT-TODO`, `HANDLE-REQUEST`, `RUN-SERVER`
+- **短縮命名**: `TodoMgr`, `LLM`, `SEND-JSON`
+- **インライン処理**: C#クラスを1行で定義
+- **グローバル変数**: `$global:tm`, `$global:ls`
+- **統一エラー処理**: 例外処理の最適化
 
 ---
 
